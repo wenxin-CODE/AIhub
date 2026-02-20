@@ -1,2 +1,6 @@
 *.zip
 *.csv
+*.env
+chroma_db/
+rawData/
+sessions/
