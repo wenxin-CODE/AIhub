@@ -8,8 +8,8 @@ from langchain_core.prompts import PromptTemplate,ChatPromptTemplate,HumanMessag
 def create_chat():
     dotenv.load_dotenv('../.env')
 
-    os.environ['ZHIPUAI_API_KEY'] = os.getenv('GML_API_KEY')
-    os.environ['ZHIPUAI_BASE_URL'] = os.getenv('GML_BASE_URL')
+    os.environ["ZHIPUAI_API_KEY"] = os.getenv('GML_API_KEY')
+    os.environ["ZHIPUAI_BASE_URL"] = os.getenv('GML_BASE_URL')
 
     chat = ChatZhipuAI(
         model="GLM-4-Flash",
@@ -50,9 +50,10 @@ def create_search_prompt(role, user_question, search_results):
         "2. 保持回答的连贯性和逻辑性\n"
         "3. 语言自然，易于理解\n"
         "4. 直接回答用户的问题，不要有引言或开场白\n"
-        "5. 参考文献部分必须另起一行展示，与正文之间有明显分隔\n"
-        "6. 每条参考文献必须独占一行，格式为：序号. 标题 - 来源 \n"
-        "7. 确保参考文献之间有清晰的换行分隔"
+        "5. 如果使用本地数据，不需要列出参考文献；如果使用网页数据，需要以参考文献的形式列出相关数据的出处\n"
+        "6. 参考文献部分必须另起一行展示，与正文之间有明显分隔\n"
+        "7. 每条参考文献必须独占一行，格式为：序号. 标题 - 来源 \n"
+        "8. 确保参考文献之间有清晰的换行分隔"
     )
     
     # 构建人类消息

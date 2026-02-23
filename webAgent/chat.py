@@ -1,6 +1,5 @@
 import os
 import json
-import hashlib
 import dotenv
 from datetime import datetime
 from flask import request
@@ -8,6 +7,8 @@ from langgraph.graph import StateGraph, START
 # from langgraph.runtime import LangGraphRunnable
 from langchain_community.chat_models import ChatZhipuAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from create import create_chat,create_prompt,create_search_prompt
+from tools import getInfo
 
 # 加载环境变量
 dotenv.load_dotenv('../.env')
@@ -47,9 +48,6 @@ class SessionManager:
         # 存储活跃会话
         self.active_sessions = {}
         
-        # 存储客户端到会话的映射
-        self.client_session_map = {}
-        
     def _initialize_llm(self):
         """
         初始化大模型
@@ -70,40 +68,6 @@ class SessionManager:
         except Exception as e:
             print(f"初始化大模型时出错: {e}")
             raise
-    
-    def _get_client_identifier(self):
-        """
-        从请求对象生成客户端标识符
-        
-        Returns:
-            str: 客户端标识符
-        """
-        try:
-            # 尝试从请求中获取客户端信息
-            client_info = []
-            
-            # 获取用户代理
-            user_agent = request.headers.get('User-Agent', '')
-            client_info.append(user_agent)
-            
-            # 获取客户端IP
-            client_ip = request.remote_addr or ''
-            client_info.append(client_ip)
-            
-            # 获取Cookie信息（如果有）
-            session_cookie = request.cookies.get('session_id', '')
-            if session_cookie:
-                client_info.append(session_cookie)
-            
-            # 生成唯一标识符
-            client_string = '|'.join(client_info)
-            client_hash = hashlib.md5(client_string.encode()).hexdigest()
-            
-            return client_hash
-        except Exception as e:
-            print(f"生成客户端标识符时出错: {e}")
-            # 如果无法获取请求信息，返回一个临时标识符
-            return f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
     
     def _create_graph(self):
         """
@@ -163,9 +127,7 @@ class SessionManager:
     
     def create_session(self, session_id=None):
         """
-        创建新会话或重用现有会话
-        
-        根据请求参数判断是否来自同一个客户端，如果是同一个客户端直接使用之前生成的session，否则生成新的session
+        创建新会话
         
         Args:
             session_id: 会话ID，默认为None（自动生成）
@@ -173,50 +135,8 @@ class SessionManager:
         Returns:
             str: 会话ID
         """
-        # 获取客户端标识符
-        client_id = self._get_client_identifier()
-        
-        # 检查客户端是否已有会话
-        if client_id in self.client_session_map:
-            # 重用现有会话
-            existing_session_id = self.client_session_map[client_id]
-            print(f"重用现有会话: {existing_session_id} 对应客户端: {client_id}")
-            
-            # 检查会话是否仍然存在
-            if existing_session_id not in self.active_sessions:
-                # 尝试从文件加载会话
-                session_data = self._load_session(existing_session_id)
-                if session_data:
-                    self.active_sessions[existing_session_id] = {
-                        "messages": session_data,
-                        "created_at": datetime.now().isoformat(),
-                        "graph": self._create_graph()
-                    }
-                else:
-                    # 如果会话不存在，创建新会话
-                    if not session_id:
-                        session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
-                    
-                    # 初始化会话状态
-                    self.active_sessions[session_id] = {
-                        "messages": [],
-                        "created_at": datetime.now().isoformat(),
-                        "graph": self._create_graph()
-                    }
-                    
-                    # 更新客户端会话映射
-                    self.client_session_map[client_id] = session_id
-                    
-                    # 保存空会话
-                    self._save_session(session_id, [])
-                    
-                    print(f"创建新会话: {session_id} 对应客户端: {client_id}")
-                    return session_id
-            
-            return existing_session_id
-        
-        # 如果客户端没有现有会话，创建新会话
         if not session_id:
+            # 自动生成会话ID
             session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
         
         # 初始化会话状态
@@ -226,13 +146,10 @@ class SessionManager:
             "graph": self._create_graph()
         }
         
-        # 更新客户端会话映射
-        self.client_session_map[client_id] = session_id
-        
         # 保存空会话
         self._save_session(session_id, [])
         
-        print(f"创建新会话: {session_id} 对应客户端: {client_id}")
+        print(f"创建新会话: {session_id}")
         return session_id
     
     def send_message(self, session_id, message):
@@ -265,7 +182,21 @@ class SessionManager:
             session = self.active_sessions[session_id]
             
             # 添加用户消息
-            user_message = HumanMessage(content=message)
+            # user_message = HumanMessage(content=message)
+            chat = create_chat()
+            role = chat.invoke(f"请根据用户问题，推断用户可能需要什么职业的人士来进行解答：{message}。回答结果只包含职业即可").content
+            search_results = getInfo(message)
+            chat_prompt = create_search_prompt(role,message,search_results)
+            # 正确处理chat_prompt.format_messages()的返回值
+            # format_messages返回的是消息对象列表，我们需要获取其内容
+            formatted_messages = chat_prompt.format_messages(user_question=message, search_results=search_results)
+            # 构建一个包含所有消息内容的字符串
+            prompt_content = ""
+            for msg in formatted_messages:
+                if hasattr(msg, 'content'):
+                    prompt_content += msg.content + "\n"
+            # 使用字符串作为HumanMessage的content
+            user_message = HumanMessage(content=prompt_content)
             session["messages"].append(user_message)
             
             # 执行状态图
@@ -432,17 +363,6 @@ class SessionManager:
             if session_id in self.active_sessions:
                 del self.active_sessions[session_id]
             
-            # 从客户端会话映射中删除
-            # 查找并删除对应的客户端映射
-            clients_to_remove = []
-            for client_id, sid in self.client_session_map.items():
-                if sid == session_id:
-                    clients_to_remove.append(client_id)
-            
-            for client_id in clients_to_remove:
-                del self.client_session_map[client_id]
-                print(f"删除客户端映射: {client_id}")
-            
             # 从文件中删除
             session_file = os.path.join(self.session_dir, f"{session_id}.json")
             if os.path.exists(session_file):
@@ -466,11 +386,11 @@ if __name__ == "__main__":
         print(f"创建会话: {session_id}")
         
         # 发送消息
-        response = session_manager.send_message(session_id, "《哈姆雷特》的作者是谁")
+        response = session_manager.send_message(session_id, "软件开发常用的mysql数据库，其事务有几种隔离级别？")
         print(f"AI回复: {response}")
         
         # 继续对话
-        response = session_manager.send_message(session_id, "他的喜剧代表作品有哪些")
+        response = session_manager.send_message(session_id, "这几种隔离级别分别是如何实现的")
         print(f"AI回复: {response}")
         
         # 获取历史记录
