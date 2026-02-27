@@ -25,7 +25,8 @@ class SessionManager:
     4. 会话状态管理
     5. 会话持久化
     """
-    
+
+    # 
     def __init__(self, model_name="GLM-4-Flash", session_dir="./sessions", system_prompt=None):
         """
         初始化会话管理器
@@ -205,10 +206,12 @@ class SessionManager:
                 "session_id": session_id
             }
             
+            # 调用graph执行prompt，获取回复，并保存历史信息
             result = session["graph"].invoke(state)
             
             # 更新会话状态
-            self.active_sessions[session_id]["messages"] = result["messages"]
+            # self.active_sessions[session_id]["messages"] = result["messages"]
+            self.active_sessions[session_id]["messages"].append(result["messages"][-1])
             
             # 返回最新的AI回复
             if result["messages"] and isinstance(result["messages"][-1], AIMessage):

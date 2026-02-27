@@ -46,6 +46,7 @@ def search_relevant_info_in_chroma(query, vectorstore, k=3, return_scores=False)
     try:
         if return_scores:
             # 执行搜索并返回相似度分数
+            # 此处返回的score是：distance = 1 - cosine_similarity
             search_results = vectorstore.similarity_search_with_score(
                 query=query,
                 k=k

@@ -199,30 +199,30 @@ def get_chroma_vectorstore(collection_name="pdf_documents", persist_directory=".
 # 示例用法
 if __name__ == "__main__":
     # 示例PDF文件路径
-    # pdf_path = "./rawData/"
+    pdf_path = "./rawData/"
     
-    # # 读取PDF并切分文本
-    # text_chunks = read_pdf_and_split(pdf_path)
+    # 读取PDF并切分文本
+    text_chunks = read_pdf_and_split(pdf_path)
     
-    # if text_chunks:
-    #     # 存储到Chroma数据库
-    #     store_vectors_to_chroma(text_chunks)
-    # else:
-    #     print("\n提示: 请将PDF文件放在正确的位置，或修改pdf_path变量指向你的PDF文件路径。")
-    from search import search_relevant_info,search_relevant_info_in_chroma
-    # 示例：加载本地存储的向量数据库
-    print("\n尝试加载本地存储的向量数据库...")
-    vectorstore = get_chroma_vectorstore()
-    if vectorstore:
-        # 执行相似度搜索
-        query = "MySQL的事务有哪几种隔离级别"
-        print(f"\n执行相似度搜索: {query}")
-        results = search_relevant_info_in_chroma(query, vectorstore, return_scores=True)
-        print(f"搜索结果数量: {len(results)}")
-        if results:
-            print("\n搜索结果预览:")
-            for i, result in enumerate(results, 1):
-                # content_preview = result.page_content[:100] + "..." if len(result.page_content) > 100 else result.page_content
-                print(f"{i}. {result}")
+    if text_chunks:
+        # 存储到Chroma数据库
+        store_vectors_to_chroma(text_chunks)
     else:
-        print("\n提示: 向量数据库不存在或无法加载。请先成功处理PDF文件后再尝试。")
+        print("\n提示: 请将PDF文件放在正确的位置，或修改pdf_path变量指向你的PDF文件路径。")
+    # from search import search_relevant_info,search_relevant_info_in_chroma
+    # # 示例：加载本地存储的向量数据库
+    # print("\n尝试加载本地存储的向量数据库...")
+    # vectorstore = get_chroma_vectorstore()
+    # if vectorstore:
+    #     # 执行相似度搜索
+    #     query = "MySQL的事务有哪几种隔离级别"
+    #     print(f"\n执行相似度搜索: {query}")
+    #     results = search_relevant_info_in_chroma(query, vectorstore, return_scores=True)
+    #     print(f"搜索结果数量: {len(results)}")
+    #     if results:
+    #         print("\n搜索结果预览:")
+    #         for i, result in enumerate(results, 1):
+    #             # content_preview = result.page_content[:100] + "..." if len(result.page_content) > 100 else result.page_content
+    #             print(f"{i}. {result}")
+    # else:
+    #     print("\n提示: 向量数据库不存在或无法加载。请先成功处理PDF文件后再尝试。")
