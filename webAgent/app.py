@@ -9,6 +9,7 @@ import threading
 import uuid
 import logging
 import time
+import re
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -111,3 +112,35 @@ if __name__ == '__main__':
     # vectorstore = get_chroma_vectorstore()
     # search_results = search_relevant_info_in_chroma("精排模型的转化率提升了多少？", vectorstore, return_scores=True)
     # print(search_results)
+
+# 邮箱导出接口
+# @app.route('/api/export_session', methods=['POST'])
+# def export_session():
+
+#     """
+#     导出会话历史到邮箱
+#     请求体: {"session_id": "xxx", "email": "user@example.com"}
+#     """
+#     try:
+#         data = request.get_json()
+#         if not data:
+#             return jsonify({"status": "fail", "message": "请求数据为空"})
+        
+#         session_id = data.get('session_id')
+#         email = data.get('email')
+        
+#         if not session_id or not email:
+#             return jsonify({"status": "fail", "message": "缺少session_id或email参数"})
+        
+#         # 验证邮箱格式
+#         if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+#             return jsonify({"status": "fail", "message": "邮箱地址格式无效"})
+        
+#         # 调用SessionManager的导出功能
+#         result = session_manager.export_session_to_email(session_id, email)
+        
+#         return jsonify(result)
+        
+#     except Exception as e:
+#         logger.error(f"导出会话到邮箱时出错: {e}")
+#         return jsonify({"status": "fail", "message": f"服务器内部错误: {str(e)}"})

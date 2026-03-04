@@ -8,7 +8,18 @@ from langgraph.graph import StateGraph, START
 from langchain_community.chat_models import ChatZhipuAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from create import create_chat,create_prompt,create_search_prompt
-from tools import getInfo
+from tools import getInfo, send_email
+import re
+import os
+import json
+import logging
+from langchain.tools import tool
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.agents import create_agent
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+
+# 配置日志
+logger = logging.getLogger(__name__)
 
 # 加载环境变量
 dotenv.load_dotenv('../.env')
@@ -46,6 +57,12 @@ class SessionManager:
         # 初始化大模型
         self.llm = self._initialize_llm()
         
+        # 初始化工具
+        self.tools = self._initialize_tools()
+        
+        # 初始化工具调用代理
+        self.agent_executor = self._initialize_agent()
+        
         # 存储活跃会话
         self.active_sessions = {}
         
@@ -69,6 +86,65 @@ class SessionManager:
         except Exception as e:
             print(f"初始化大模型时出错: {e}")
             raise
+    
+    def _initialize_tools(self):
+        """
+        初始化工具函数
+        
+        Returns:
+            list: 工具列表
+        """
+        @tool
+        def export_session_to_email(session_id: str, email: str) -> dict:
+            """
+            将指定会话的历史记录导出并发送到指定邮箱
+            
+            Args:
+                session_id: 会话ID
+                email: 收件人邮箱地址
+                
+            Returns:
+                dict: 包含status和message的字典
+            """
+            return self.export_session_to_email(session_id, email)
+        
+        return [export_session_to_email]
+    
+    def _initialize_agent(self):
+        """
+        初始化工具调用代理
+        
+        Returns:
+            AgentExecutor: 工具调用代理执行器
+        """
+        # 创建提示词模板
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", self.system_prompt),
+            ("placeholder", "{chat_history}"),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}")
+        ])
+        
+        # 创建工具调用代理
+        agent = create_agent(
+            model=self.llm,
+            tools=self.tools,
+            # prompt=prompt,
+            # verbose=True,
+            # handle_parsing_errors=True,
+            # max_iterations=3
+        )
+        
+        # 创建代理执行器
+        # agent_executor = AgentExecutor.from_agent_and_tools(
+        #     agent=agent,
+        #     tools=self.tools,
+        #     verbose=True,
+        #     handle_parsing_errors=True,
+        #     max_iterations=3
+        # )
+        
+        return agent
     
     def _create_graph(self):
         """
@@ -165,6 +241,11 @@ class SessionManager:
             str: 大模型回复内容
         """
         try:
+            # 检查用户是否请求导出会话历史
+            export_result = self._check_and_export_session(message, session_id)
+            if export_result:
+                return export_result
+            
             # 检查会话是否存在
             if session_id not in self.active_sessions:
                 # 尝试从文件加载会话
@@ -184,8 +265,8 @@ class SessionManager:
             
             # 添加用户消息
             # user_message = HumanMessage(content=message)
-            chat = create_chat()
-            role = chat.invoke(f"请根据用户问题，推断用户可能需要什么职业的人士来进行解答：{message}。回答结果只包含职业即可").content
+            # chat = create_chat()
+            role = self.llm.invoke(f"请根据用户问题，推断用户可能需要什么职业的人士来进行解答：{message}。回答结果只包含职业即可").content
             search_results = getInfo(message)
             chat_prompt = create_search_prompt(role,message,search_results)
             # 正确处理chat_prompt.format_messages()的返回值
@@ -222,6 +303,36 @@ class SessionManager:
         except Exception as e:
             print(f"发送消息时出错: {e}")
             return f"抱歉，处理您的请求时出错: {e}"
+    
+    def _check_and_export_session(self, message, session_id):
+        """
+        检查用户是否请求导出会话历史
+        
+        Args:
+            message: 用户消息
+            session_id: 会话ID
+            
+        Returns:
+            str or None: 如果请求导出则返回结果，否则返回None
+        """
+        # 检查是否包含导出会话的关键词
+        export_keywords = ["导出会话", "发送历史", "邮件发送", "export session", "send history"]
+        
+        if any(keyword in message.lower() for keyword in export_keywords):
+            # 尝试从消息中提取邮箱地址
+            email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', message)
+            if email_match:
+                email = email_match.group()
+                logger.info(f"检测到导出会话请求，session_id={session_id}, email={email}")
+                result = self.export_session_to_email(session_id, email)
+                if result["status"] == "success":
+                    return f"会话历史已成功发送到 {email}"
+                else:
+                    return f"导出会话失败: {result['message']}"
+            else:
+                return "请提供有效的邮箱地址，例如：导出会话历史到 user@example.com"
+        
+        return None
     
     def get_history(self, session_id):
         """
@@ -376,6 +487,158 @@ class SessionManager:
         except Exception as e:
             print(f"删除会话时出错: {e}")
             return False
+    
+    def export_session_to_email(self, session_id, to_email, smtp_config=None):
+        """
+        将会话历史导出并通过邮件发送
+        
+        Args:
+            session_id: 会话ID
+            to_email: �件人邮箱地址
+            smtp_config: SMTP配置字典，包含host, port, user, password。
+                        如果不提供，将从环境变量中读取。
+            
+        Returns:
+            dict: {"status": "success|fail", "message": "详细信息"}
+        """
+        try:
+            # 验证邮箱地址格式
+            if not self._validate_email(to_email):
+                return {"status": "fail", "message": "邮箱地址格式无效"}
+            
+            # 获取会话历史
+            history = self.get_history(session_id)
+            if not history:
+                return {"status": "fail", "message": "会话历史为空或不存在"}
+            
+            # 构建邮件内容
+            email_body = self._build_email_body(history, session_id)
+            
+            # 使用配置的SMTP设置或使用环境变量
+            if smtp_config is None:
+                try:
+                    smtp_config = self._get_smtp_config()
+                except ValueError as e:
+                    logger.error(f"SMTP配置错误: {e}")
+                    return {
+                        "status": "fail", 
+                        "message": f"SMTP配置错误: {str(e)}\n"
+                                  "请在.env文件中设置SMTP_HOST、SMTP_USER和SMTP_PASSWORD环境变量"
+                    }
+            
+            # 发送邮件
+            success, message = send_email(
+                to_email=to_email,
+                subject=f"会话历史导出 - {session_id} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                body=email_body,
+                smtp_host=smtp_config['host'],
+                smtp_port=int(smtp_config['port']),
+                smtp_user=smtp_config['user'],
+                smtp_password=smtp_config['password'],
+                timeout=10
+            )
+            
+            if success:
+                logger.info(f"会话历史邮件发送成功: session_id={session_id}, to_email={to_email}")
+                return {"status": "success", "message": f"会话历史已成功发送到 {to_email}"}
+            else:
+                logger.error(f"会话历史邮件发送失败: session_id={session_id}, error={message}")
+                return {"status": "fail", "message": f"邮件发送失败: {message}"}
+                
+        except Exception as e:
+            logger.error(f"导出会话到邮件时出错: {e}")
+            return {"status": "fail", "message": f"导出会话时出错: {str(e)}"}
+    
+    def _validate_email(self, email):
+        """
+        验证邮箱地址格式
+        
+        Args:
+            email: 邮箱地址
+            
+        Returns:
+            bool: 邮箱地址是否有效
+        """
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return bool(re.match(pattern, email))
+    
+    def _build_email_body(self, history, session_id):
+        """
+        构建邮件正文内容
+        
+        Args:
+            history: 会话历史消息列表
+            session_id: 会话ID
+            
+        Returns:
+            str: 格式化的邮件正文
+        """
+        lines = []
+        lines.append("=" * 80)
+        lines.append(f"会话ID: {session_id}")
+        lines.append(f"导出时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append("=" * 80)
+        lines.append("")
+        
+        for i, msg in enumerate(history, 1):
+            msg_type = msg.__class__.__name__
+            content = msg.content
+            
+            # 根据消息类型添加前缀
+            if msg_type == "HumanMessage":
+                prefix = "用户提问"
+            elif msg_type == "AIMessage":
+                prefix = "AI回复"
+            elif msg_type == "SystemMessage":
+                prefix = "系统消息"
+            else:
+                prefix = msg_type
+            
+            # 添加时间戳
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            lines.append(f"[{timestamp}] {prefix} (消息 {i}):")
+            lines.append("-" * 40)
+            lines.append(content)
+            lines.append("")
+            lines.append("")
+        
+        lines.append("=" * 80)
+        lines.append(f"会话结束 - 共 {len(history)} 条消息")
+        lines.append("=" * 80)
+        
+        return "\n".join(lines)
+    
+    def _get_smtp_config(self):
+        """
+        从环境变量获取SMTP配置
+        
+        Returns:
+            dict: SMTP配置字典
+            
+        Raises:
+            ValueError: 当SMTP配置不完整时
+        """
+        host = os.getenv('SMTP_HOST')
+        port = os.getenv('SMTP_PORT', '465')
+        user = os.getenv('SMTP_USER')
+        password = os.getenv('SMTP_PASSWORD')
+        
+        # 检查必需的配置项
+        if not host or not user or not password:
+            raise ValueError(
+                "SMTP配置不完整，请在.env文件中设置以下环境变量：\n"
+                "SMTP_HOST=SMTP服务器地址（如：smtp.gmail.com）\n"
+                "SMTP_USER=SMTP账号（如：your_email@gmail.com）\n"
+                "SMTP_PASSWORD=SMTP密码或应用专用密码"
+            )
+        
+        return {
+            'host': host,
+            'port': port,
+            'user': user,
+            'password': password
+        }
 
 
 # 示例用法
