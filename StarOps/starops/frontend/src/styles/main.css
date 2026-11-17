@@ -1,0 +1,74 @@
+/* StarOps 全局样式 —— 深色主题，与赛博朋克视觉一致 */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0d131b;
+  color: #d5dee8;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+
+/* Element Plus 深色变量覆盖 */
+:root {
+  --el-bg-color: #131a24;
+  --el-bg-color-overlay: #131a24;
+  --el-border-color: #22303f;
+  --el-border-color-light: #22303f;
+  --el-border-color-lighter: #1a2530;
+  --el-text-color-primary: #d5dee8;
+  --el-text-color-regular: #a8b8c8;
+  --el-text-color-secondary: #7d8ea3;
+  --el-fill-color-blank: #131a24;
+  --el-fill-color-light: #18212d;
+  --el-color-primary: #00f0ff;
+  --el-color-success: #00d087;
+  --el-color-warning: #ffb020;
+  --el-color-danger: #ff4d4f;
+}
+
+/* Leaflet 深色适配 */
+.leaflet-container {
+  background: #0a0f16;
+}
+.leaflet-control-attribution {
+  background: rgba(13, 19, 27, 0.8) !important;
+  color: #5c6b7d !important;
+  font-size: 11px !important;
+}
+.leaflet-control-attribution a {
+  color: #00f0ff !important;
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #1a2530 !important;
+  color: #d5dee8 !important;
+  border: 0.5px solid #22303f;
+  box-shadow: none !important;
+}
+.leaflet-popup-content {
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0d131b;
+}
+::-webkit-scrollbar-thumb {
+  background: #22303f;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2d3f52;
+}

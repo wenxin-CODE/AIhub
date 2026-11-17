@@ -1,0 +1,25 @@
+# StarOps 后端依赖
+
+# ---- 核心 ----
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
+httpx>=0.26.0
+python-multipart>=0.0.9      # 影像上传
+
+# ---- 数值计算 ----
+# SAR 算法层（局部方差/ENL/Lee/中值/自适应/FFT 条纹检测）纯 numpy 实现，
+# 不依赖 OpenCV；numpy 是硬依赖。
+numpy>=1.26.0
+
+# ---- 可选增强 ----
+# 仅用于读取 TIFF / GeoTIFF 等更多影像格式。
+# 缺失时 PNG 演示链路与全部指标计算仍完全可用（见 tools/imaging.py）。
+opencv-python-headless>=4.9.0
+
+# ---- LangGraph 状态图（缺失时自动降级为内置顺序执行器）----
+langgraph>=0.2.0
+
+# ---- 测试 ----
+pytest>=8.0.0
+pytest-asyncio>=0.23.0

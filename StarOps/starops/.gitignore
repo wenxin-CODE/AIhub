@@ -1,0 +1,20 @@
+# Python 虚拟环境
+.venv/
+.wheels/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 运行时数据（本地重建，不入库）
+data/*.db
+data/checkpoints/
+data/images/
+
+# 本地环境变量（含 API Key，禁止入库；模板见 .env.example）
+.env
+.env.local
+!.env.example
+
+# 前端
+node_modules/
+dist/
